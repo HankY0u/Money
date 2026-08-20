@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>記憶體暫存記帳 (功能優化版)</title>
+  <title>記憶體暫存記帳 (流程控管版)</title>
   <style>
     :root {
       --primary: #2563eb;
@@ -33,6 +33,11 @@
       border: 2px solid var(--primary);
       background: #eff6ff;
     }
+    .card-locked {
+      background: #f1f5f9;
+      border: 1px dashed #94a3b8;
+      opacity: 0.7;
+    }
     .edit-mode-banner {
       background: #fef3c7;
       border: 1px solid #f59e0b;
@@ -59,7 +64,6 @@
       background: #fff;
     }
     
-    /* 5 個選項的 Segmented Control 樣式 */
     .segmented-control {
       display: flex;
       background: #e2e8f0;
@@ -69,9 +73,7 @@
       user-select: none;
       overflow-x: auto;
     }
-    .segmented-control input[type="radio"] {
-      display: none;
-    }
+    .segmented-control input[type="radio"] { display: none; }
     .segmented-control label {
       flex: 1;
       text-align: center;
@@ -236,144 +238,155 @@
 
 <div class="container">
   <div class="status-banner">
-    ⚠️ <b>本頁面不儲存資料至手機</b><br>記帳完請記得點選最下方「匯出最新 JSON 檔」存檔。
+    ⚠️ <b>本頁面不儲存資料至手機</b><br>請先「讀取舊檔」或「建立新檔」後即可開始填寫。
   </div>
 
-  <!-- 步驟 1：匯入 JSON 檔 -->
-  <div class="card card-highlight">
-    <h2>1. 讀取 JSON 檔 (覆蓋與異動統計)</h2>
+  <!-- 1. 讀取 JSON 檔 (起手步驟) -->
+  <div class="card card-highlight" id="importCard">
+    <h2>1. 讀取 JSON 舊檔</h2>
+    <p style="font-size:0.85rem; color:#475569; margin-top:-4px;">請選擇先前的備份檔以解鎖記帳功能：</p>
     <button type="button" class="btn btn-secondary" onclick="document.getElementById('importFile').click()">選擇備份檔 (.json)</button>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importJSON(event)">
     <div id="importInfo" style="margin-top:8px; font-size:0.85rem; color:#0369a1; font-weight:bold;"></div>
   </div>
 
-  <!-- 步驟 2：輸入與編輯消費資料 -->
-  <div class="card" id="formCard">
-    <h2 id="formTitle">2. 輸入消費資料</h2>
-    <div id="editBanner" class="edit-mode-banner" style="display:none;">
-      <span>✏️ 正在編輯紀錄</span>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="cancelEdit()">取消編輯</button>
-    </div>
-
-    <form id="expenseForm">
-      <input type="hidden" id="editId" value="">
-
-      <!-- 款項來源 (預設其他) -->
-      <div class="form-group">
-        <label>款項來源</label>
-        <div class="segmented-control">
-          <input type="radio" id="payer1" name="payer" value="其他" checked>
-          <label for="payer1">其他</label>
-
-          <input type="radio" id="payer2" name="payer" value="我方支應">
-          <label for="payer2">我方支應</label>
-
-          <input type="radio" id="payer3" name="payer" value="公款支應">
-          <label for="payer3">公款支應</label>
-
-          <input type="radio" id="payer4" name="payer" value="已收">
-          <label for="payer4">已收</label>
-
-          <input type="radio" id="payer5" name="payer" value="電支代收取">
-          <label for="payer5">電支代收取</label>
-        </div>
-      </div>
-      
-      <div class="grid-2">
-        <div class="form-group">
-          <label>日期</label>
-          <input type="date" id="date" required>
-        </div>
-        <div class="form-group">
-          <label>時間</label>
-          <input type="time" id="time" required>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="form-group">
-          <label>支付管道/分類</label>
-          <select id="category" required>
-            <option value="現金">現金</option>
-            <option value="全支-CUBE">全支-CUBE</option>
-            <option value="全支-國泰">全支-國泰</option>
-            <option value="全支-將來">全支-將來</option>
-            <option value="全支-郵局">全支-郵局</option>
-            <option value="其他">其他</option>
-            <option value="CUBE">CUBE</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>消費項目</label>
-          <input type="text" id="itemName" placeholder="例如：午餐拉麵、公務交通費" required>
-        </div>
-      </div>
-
-      <div class="grid-3">
-        <div class="form-group">
-          <label>日幣 (JPY)</label>
-          <input type="number" id="jpy" step="0.01" value="0" required oninput="handleJpyInput()">
-        </div>
-        <div class="form-group">
-          <label>紀錄匯率</label>
-          <input type="number" id="rate" step="0.0001" placeholder="0.2150">
-        </div>
-        <div class="form-group">
-          <label>台幣 (TWD)</label>
-          <input type="number" id="twd" step="0.01" value="0" required>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="form-group">
-          <label>回饋 1</label>
-          <input type="number" id="reward1" step="0.01" value="0">
-        </div>
-        <div class="form-group">
-          <label>回饋 2</label>
-          <input type="number" id="reward2" step="0.01" value="0">
-        </div>
-      </div>
-
-      <!-- GPS 定位資訊欄位 -->
-      <div class="form-group">
-        <label>📍 GPS 位置紀錄</label>
-        <div class="gps-input-group">
-          <input type="text" id="gpsDisplay" placeholder="未取得定位" readonly style="background:#f1f5f9; color:#475569;">
-          <button type="button" class="btn btn-outline btn-sm" style="width: auto; white-space: nowrap;" onclick="getGPSLocation()">📍 重新定位</button>
-        </div>
-        <input type="hidden" id="gpsData" value="">
-      </div>
-
-      <!-- 照片上傳區 -->
-      <div class="form-group">
-        <label>照片 (支援多張發票/商品圖)</label>
-        <div class="grid-2">
-          <button type="button" class="btn btn-outline" onclick="document.getElementById('cameraInput').click()">📷 開啟相機拍照</button>
-          <button type="button" class="btn btn-outline" onclick="document.getElementById('albumInput').click()">🖼️ 從相簿選擇 (可多選)</button>
-        </div>
-        
-        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" onchange="handleFileSelect(event)">
-        <input type="file" id="albumInput" accept="image/*" multiple style="display:none" onchange="handleFileSelect(event)">
-        
-        <div id="formPhotoPreview" class="form-photo-preview"></div>
-        <div id="photoStatusText" style="margin-top:4px; font-size:0.8rem; color:#0369a1;"></div>
-      </div>
-
-      <div class="form-group">
-        <label>詳細備註</label>
-        <input type="text" id="note" placeholder="例如：一蘭心齋橋店、報帳統編備註">
-      </div>
-
-      <button type="submit" class="btn" id="submitBtn">新增至暫存清單</button>
-    </form>
+  <!-- 2. 存檔帶走 (匯出 JSON，已上移) -->
+  <div class="card card-highlight">
+    <h2>2. 存檔帶走 (匯出 JSON)</h2>
+    <button type="button" class="btn btn-success" id="exportBtn" onclick="exportJSON()" disabled>匯出最新 JSON 檔</button>
+    <div id="downloadArea" style="margin-top:10px; text-align:center;"></div>
   </div>
 
-  <!-- 步驟 3：查詢與彙總 -->
+  <!-- 3. 輸入與編輯消費資料 (鎖定控制) -->
+  <div class="card card-locked" id="formCard">
+    <div id="formLockNotice" style="text-align:center; padding:10px 0; color:#64748b; font-size:0.9rem;">
+      🔒 <b>表單已鎖定</b><br>請先於上方讀取舊檔，或滑至最下方點擊「建立新檔」
+    </div>
+
+    <div id="formContent" style="display:none;">
+      <h2 id="formTitle">3. 輸入消費資料</h2>
+      <div id="editBanner" class="edit-mode-banner" style="display:none;">
+        <span>✏️ 正在編輯紀錄</span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cancelEdit()">取消編輯</button>
+      </div>
+
+      <form id="expenseForm">
+        <input type="hidden" id="editId" value="">
+
+        <!-- 款項來源 (預設其他) -->
+        <div class="form-group">
+          <label>款項來源</label>
+          <div class="segmented-control">
+            <input type="radio" id="payer1" name="payer" value="其他" checked>
+            <label for="payer1">其他</label>
+
+            <input type="radio" id="payer2" name="payer" value="我方支應">
+            <label for="payer2">我方支應</label>
+
+            <input type="radio" id="payer3" name="payer" value="公款支應">
+            <label for="payer3">公款支應</label>
+
+            <input type="radio" id="payer4" name="payer" value="已收">
+            <label for="payer4">已收</label>
+
+            <input type="radio" id="payer5" name="payer" value="電支代收取">
+            <label for="payer5">電支代收取</label>
+          </div>
+        </div>
+        
+        <div class="grid-2">
+          <div class="form-group">
+            <label>日期</label>
+            <input type="date" id="date" required>
+          </div>
+          <div class="form-group">
+            <label>時間</label>
+            <input type="time" id="time" required>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>支付管道/分類</label>
+            <select id="category" required>
+              <option value="現金">現金</option>
+              <option value="全支-CUBE">全支-CUBE</option>
+              <option value="全支-國泰">全支-國泰</option>
+              <option value="全支-將來">全支-將來</option>
+              <option value="全支-郵局">全支-郵局</option>
+              <option value="其他">其他</option>
+              <option value="CUBE">CUBE</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>消費項目</label>
+            <input type="text" id="itemName" placeholder="例如：午餐拉麵、公務交通費" required>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="form-group">
+            <label>日幣 (JPY)</label>
+            <input type="number" id="jpy" step="0.01" value="0" required oninput="handleJpyInput()">
+          </div>
+          <div class="form-group">
+            <label>紀錄匯率</label>
+            <input type="number" id="rate" step="0.0001" placeholder="0.2150">
+          </div>
+          <div class="form-group">
+            <label>台幣 (TWD)</label>
+            <input type="number" id="twd" step="0.01" value="0" required>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>回饋 1</label>
+            <input type="number" id="reward1" step="0.01" value="0">
+          </div>
+          <div class="form-group">
+            <label>回饋 2</label>
+            <input type="number" id="reward2" step="0.01" value="0">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>📍 GPS 位置紀錄</label>
+          <div class="gps-input-group">
+            <input type="text" id="gpsDisplay" placeholder="未取得定位" readonly style="background:#f1f5f9; color:#475569;">
+            <button type="button" class="btn btn-outline btn-sm" style="width: auto; white-space: nowrap;" onclick="getGPSLocation()">📍 重新定位</button>
+          </div>
+          <input type="hidden" id="gpsData" value="">
+        </div>
+
+        <div class="form-group">
+          <label>照片 (支援多張發票/商品圖)</label>
+          <div class="grid-2">
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('cameraInput').click()">📷 開啟相機拍照</button>
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('albumInput').click()">🖼️ 從相簿選擇 (可多選)</button>
+          </div>
+          
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" onchange="handleFileSelect(event)">
+          <input type="file" id="albumInput" accept="image/*" multiple style="display:none" onchange="handleFileSelect(event)">
+          
+          <div id="formPhotoPreview" class="form-photo-preview"></div>
+          <div id="photoStatusText" style="margin-top:4px; font-size:0.8rem; color:#0369a1;"></div>
+        </div>
+
+        <div class="form-group">
+          <label>詳細備註</label>
+          <input type="text" id="note" placeholder="例如：一蘭心齋橋店、報帳統編備註">
+        </div>
+
+        <button type="submit" class="btn" id="submitBtn">新增至暫存清單</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. 查詢與彙總 -->
   <div class="card">
-    <h2>3. 暫存資料查詢與彙總 (<span id="totalCount">0</span> 筆)</h2>
+    <h2>4. 暫存資料查詢與彙總 (<span id="totalCount">0</span> 筆)</h2>
     
-    <!-- 關鍵字搜尋欄位 -->
     <div class="form-group">
       <label>🔍 關鍵字搜尋 (項目名稱或備註)</label>
       <input type="text" id="filterKeyword" placeholder="輸入關鍵字即可即時過濾...">
@@ -426,11 +439,10 @@
     <div id="recordsList"></div>
   </div>
 
-  <!-- 步驟 4：匯出存檔 -->
-  <div class="card card-highlight">
-    <h2>4. 存檔帶走 (匯出 JSON)</h2>
-    <button type="button" class="btn btn-success" onclick="exportJSON()">匯出最新 JSON 檔</button>
-    <div id="downloadArea" style="margin-top:10px; text-align:center;"></div>
+  <!-- 建立新檔解鎖按鈕 -->
+  <div class="card" style="text-align:center; background:#f8fafc; border:1px dashed #cbd5e1;">
+    <p style="font-size:0.85rem; color:#64748b; margin-bottom:8px;">如果您沒有舊的 JSON 檔，點擊下方按鈕以建立全新記帳檔：</p>
+    <button type="button" class="btn btn-outline" id="createNewBtn" onclick="createNewFile()">✨ 建立新檔 (從空白開始)</button>
   </div>
 </div>
 
@@ -442,13 +454,33 @@
 <script>
 let tempStore = [];
 let pendingPhotosBase64 = [];
+let isUnlocked = false;
 const DEFAULT_JPY_RATE = 0.2150;
 
 document.addEventListener("DOMContentLoaded", () => {
   setDefaultDateTime();
   getGPSLocation();
-  render();
 });
+
+function unlockSystem() {
+  isUnlocked = true;
+  document.getElementById("formCard").classList.remove("card-locked");
+  document.getElementById("formLockNotice").style.display = "none";
+  document.getElementById("formContent").style.display = "block";
+  document.getElementById("exportBtn").disabled = false;
+  document.getElementById("createNewBtn").innerText = "已開立新檔 (重新清空)";
+  render();
+}
+
+function createNewFile() {
+  if (tempStore.length > 0) {
+    if (!confirm("建立新檔將清空當前畫面未匯出的資料，確定要繼續嗎？")) return;
+  }
+  tempStore = [];
+  unlockSystem();
+  document.getElementById("importInfo").innerText = "已開立全新空白檔";
+  alert("系統已解鎖！現在可以開始輸入消費資料。");
+}
 
 function setDefaultDateTime() {
   const now = new Date();
@@ -543,12 +575,14 @@ function setSelectedPayer(val) {
   if (target) {
     target.checked = true;
   } else {
-    document.getElementById("payer1").checked = true; // 預設其他
+    document.getElementById("payer1").checked = true;
   }
 }
 
 document.getElementById("expenseForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!isUnlocked) return;
+
   const btn = document.getElementById("submitBtn");
   const editId = document.getElementById("editId").value;
   btn.disabled = true;
@@ -578,12 +612,12 @@ document.getElementById("expenseForm").addEventListener("submit", async (e) => {
       const idx = tempStore.findIndex(i => i.id === editId);
       if (idx !== -1) {
         tempStore[idx] = { ...tempStore[idx], ...recordData };
-        alert("紀錄已更新！請記得離開前匯出最新 JSON 檔。");
+        alert("紀錄已更新！請記得匯出最新 JSON 檔。");
       }
     } else {
       recordData.id = "exp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
       tempStore.push(recordData);
-      alert("已成功新增！請記得離開前匯出最新 JSON 檔。");
+      alert("已成功新增！請記得匯出最新 JSON 檔。");
     }
 
     cancelEdit();
@@ -632,7 +666,7 @@ function editItem(id) {
   const statusEl = document.getElementById("photoStatusText");
   statusEl.innerText = pendingPhotosBase64.length > 0 ? `已有 ${pendingPhotosBase64.length} 張照片` : "";
 
-  document.getElementById("formTitle").innerText = "2. 編輯消費資料";
+  document.getElementById("formTitle").innerText = "3. 編輯消費資料";
   document.getElementById("editBanner").style.display = "flex";
   document.getElementById("submitBtn").innerText = "更新紀錄";
   document.getElementById("submitBtn").className = "btn btn-warning";
@@ -648,7 +682,7 @@ function cancelEdit() {
   updateFormPhotoPreview();
   document.getElementById("photoStatusText").innerText = "";
 
-  document.getElementById("formTitle").innerText = "2. 輸入消費資料";
+  document.getElementById("formTitle").innerText = "3. 輸入消費資料";
   document.getElementById("editBanner").style.display = "none";
   document.getElementById("submitBtn").innerText = "新增至暫存清單";
   document.getElementById("submitBtn").className = "btn";
@@ -685,6 +719,8 @@ function compressAndToBase64(file) {
 }
 
 function render() {
+  if (!isUnlocked) return;
+
   const keyword = document.getElementById("filterKeyword").value.trim().toLowerCase();
   const filterPayer = document.getElementById("filterPayer").value;
   const cat = document.getElementById("filterCategory").value;
@@ -706,7 +742,6 @@ function render() {
     const itemName = (item.itemName || "").toLowerCase();
     const itemNote = (item.note || "").toLowerCase();
 
-    // 關鍵字搜尋過濾 (比對項目名稱與備註)
     if (keyword && !itemName.includes(keyword) && !itemNote.includes(keyword)) return;
     if (filterPayer !== "ALL" && itemPayer !== filterPayer) return;
     if (cat !== "ALL" && item.category !== cat) return;
@@ -804,44 +839,15 @@ function importJSON(event) {
         return;
       }
 
-      const oldMap = new Map(tempStore.map(item => [item.id, item]));
-      const newMap = new Map();
+      tempStore = importedData.map(item => ({
+        ...item,
+        id: item.id || ("exp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5))
+      }));
 
-      let added = 0;
-      let modified = 0;
+      unlockSystem();
 
-      const updatedStore = importedData.map(item => {
-        const itemId = item.id || ("exp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5));
-        const cleanItem = { ...item, id: itemId };
-        newMap.set(itemId, cleanItem);
-
-        if (!oldMap.has(itemId)) {
-          added++;
-        } else {
-          const oldItem = oldMap.get(itemId);
-          if (JSON.stringify(oldItem) !== JSON.stringify(cleanItem)) {
-            modified++;
-          }
-        }
-        return cleanItem;
-      });
-
-      let removed = 0;
-      oldMap.forEach((_, id) => {
-        if (!newMap.has(id)) {
-          removed++;
-        }
-      });
-
-      tempStore = updatedStore;
-
-      const msg = `📊 匯入覆蓋成功！統計結果：\n\n` +
-                  `＋ 新增：${added} 筆\n` +
-                  `－ 移除：${removed} 筆\n` +
-                  `✏️ 變更：${modified} 筆\n\n` +
-                  `目前暫存清單總計 ${tempStore.length} 筆資料。`;
-
-      document.getElementById("importInfo").innerText = `新增 ${added} 筆 | 移除 ${removed} 筆 | 變更 ${modified} 筆`;
+      const msg = `📊 舊檔讀取成功！共載入 ${tempStore.length} 筆紀錄。`;
+      document.getElementById("importInfo").innerText = `已成功讀取 ${tempStore.length} 筆資料`;
       alert(msg);
 
       cancelEdit();
@@ -855,6 +861,7 @@ function importJSON(event) {
 }
 
 function exportJSON() {
+  if (!isUnlocked) return;
   if (tempStore.length === 0) {
     if (!confirm("目前暫存清單是空的，確定要匯出空檔案嗎？")) return;
   }
